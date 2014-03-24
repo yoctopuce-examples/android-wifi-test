@@ -10,5 +10,12 @@
     <string name="default_hub_ip">192.168.43.70</string>
     <string name="wifi">Wifi</string>
     <string name="access_point">Access point</string>
+    <string name="update">Update</string>
+    <string name="update_bg">Update Background</string>
+    <string name="background_service">Backgound Service</string>
+    <string name="started">Started</string>
+    <string name="stopped">stoped</string>
+    <string name="camera">Camera</string>
+    <string name="takepicture">Take Picture</string>
 
 </resources>

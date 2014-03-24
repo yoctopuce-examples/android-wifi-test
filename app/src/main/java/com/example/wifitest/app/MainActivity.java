@@ -1,336 +1,333 @@
 package com.example.wifitest.app;
 
-import android.annotation.TargetApi;
-import android.app.Activity;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
-import android.net.wifi.SupplicantState;
+import android.media.MediaScannerConnection;
+import android.net.Uri;
 import android.net.wifi.WifiConfiguration;
-import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.AsyncTask;
-import android.os.Build;
-import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
+import android.os.Environment;
+import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.CompoundButton;
-import android.widget.EditText;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.yoctopuce.YoctoAPI.YAPI;
+import com.yoctopuce.YoctoAPI.YAPI_Exception;
+import com.yoctopuce.YoctoAPI.YHumidity;
+import com.yoctopuce.YoctoAPI.YLightSensor;
+import com.yoctopuce.YoctoAPI.YModule;
+import com.yoctopuce.YoctoAPI.YPressure;
+import com.yoctopuce.YoctoAPI.YTemperature;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.io.UnsupportedEncodingException;
+import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
 
 
 public class MainActivity extends ActionBarActivity {
 
     private static final String DEBUG_TAG = "WIFITEST";
     private TextView _textViewResult;
-    private EditText _editTextHubIp;
-    private Switch _wifiSwitch;
     private WifiManager _wifiManager;
-    private IntentFilter _intentFilter;
-    private ConnectivityManager _connectivityManager;
-    private Switch _apSwitch;
+    private TextView _humitidtyTextView;
+    private TextView _luminosity;
+    private static final long NETWORK_DETECTION_TIMEOUT_MS = 60000;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        _humitidtyTextView = (TextView) findViewById(R.id.humidity);
+        _luminosity = (TextView) findViewById(R.id.luminosity);
         _textViewResult = (TextView) findViewById(R.id.result);
-        _editTextHubIp = (EditText) findViewById(R.id.hubIp);
-        _wifiSwitch = (Switch) findViewById(R.id.switch_wifi);
-        _wifiSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                setWifiState(isChecked);
-            }
-        });
 
-        _apSwitch = (Switch) findViewById(R.id.switch_AP);
-        _apSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                setAPState(isChecked);
+        Switch bgControl = (Switch) findViewById(R.id.bgcontrol);
+        bgControl.setChecked(BgSensorsService.isServiceAlarmOn(getApplicationContext()));
+        bgControl.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked)
+            {
+                if (isChecked) {
+                    BgSensorsService.SetServiceAlarm(getApplicationContext(), true);
+                } else {
+                    BgSensorsService.SetServiceAlarm(getApplicationContext(), false);
+                }
             }
         });
 
         _wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
-        _connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        _intentFilter = new IntentFilter();
-        _intentFilter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
-        _intentFilter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
-        _intentFilter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION);
-        _intentFilter.addAction(WifiManager.SUPPLICANT_CONNECTION_CHANGE_ACTION);
-
 
     }
 
-    private void setAPState(boolean isChecked)
+    public void updateInBg(View view)
     {
-        WifiConfiguration wifi_configuration = null;
-        _wifiManager.setWifiEnabled(false);
-
-        try
-        {
-            //USE REFLECTION TO GET METHOD "SetWifiAPEnabled"
-            Method method=_wifiManager.getClass().getMethod("setWifiApEnabled", WifiConfiguration.class, boolean.class);
-            method.invoke(_wifiManager, wifi_configuration, isChecked);
-        }
-        catch (NoSuchMethodException e)
-        {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        catch (IllegalArgumentException e)
-        {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        catch (IllegalAccessException e)
-        {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        catch (InvocationTargetException e)
-        {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
+        Intent i = new Intent(this, BgSensorsService.class);
+        startService(i);
     }
 
-    private void setWifiState(boolean isChecked)
+    public void update(View view)
+    {
+        String[] serials = new String[2];
+        new GetMeasureBG().execute(serials);
+    }
+
+    public void takePicture(View view)
     {
 
-        boolean res = _wifiManager.setWifiEnabled(isChecked);
-        if (res) {
-            dispMsg("Set Wifi to "+(isChecked?"ON":"Off"));
-        } else {
-            dispMsg("Unable to set  Wifi to "+(isChecked?"ON":"Off"));
-        }
-    }
 
-    private BroadcastReceiver wifiChangeReciever = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent)
-        {
-            String action = intent.getAction();
-            if (action != null) {
-                if (action.equals(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)) {
-                    dispMsg("SCAN_RESULTS_AVAILABLE_ACTION");
-                } else if (action.equals(WifiManager.WIFI_STATE_CHANGED_ACTION)) {
-                    int newState = intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_UNKNOWN);
-                    int oldState = intent.getIntExtra(WifiManager.EXTRA_PREVIOUS_WIFI_STATE, WifiManager.WIFI_STATE_UNKNOWN);
-                    String msg = "WIFI_STATE_CHANGED_ACTION ("+ WifiStateToString(oldState)+ " to "+WifiStateToString(newState)+")";
-                    dispMsg(msg);
-                } else if (action.equals(WifiManager.SUPPLICANT_CONNECTION_CHANGE_ACTION)) {
-                    boolean gained = intent.getBooleanExtra(WifiManager.EXTRA_SUPPLICANT_CONNECTED, false);
-                    dispMsg("SUPPLICANT_CONNECTION_CHANGE_ACTION "+(gained?"gained":"lost"));
-                } else if (action.equals(WifiManager.NETWORK_STATE_CHANGED_ACTION)) {
-                    dispMsg("NETWORK_STATE_CHANGED_ACTION");
-                    NetworkInfo netinfo =intent.getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO);
-                    dispMsg(netinfo.toString());
-                    String bssid = intent.getStringExtra(WifiManager.EXTRA_BSSID);
-                    WifiInfo wifiInfo = intent.getParcelableExtra(WifiManager.EXTRA_WIFI_INFO);
-                    boolean dumy = false;
+        GBTakePictureNoPreview c = new GBTakePictureNoPreview(this);
+        c.setLandscape();
+        //c.setUseFrontCamera(false);
+
+        //here,we are making a folder named picFolder to store pics taken by the camera using this application
+        File pictureDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyymmddhhmmss");
+        String date = dateFormat.format(new Date());
+        String fileName = pictureDir + "/" + date + ".jpg";
+        c.setFileName(fileName);
+        if (c.cameraIsOk()) {
+            c.takePicture();
+        }
+        Toast.makeText(this, "new photo "+fileName,Toast.LENGTH_LONG).show();
+
+//        Bitmap bmp = BitmapFactory.decodeByteArray(myArray, 0, myArray.length).copy(Bitmap.Config.RGBA_8888, true); //myArray is the byteArray containing the image. Use copy() to create a mutable bitmap. Feel free to change the config-type. Consider doing this in two steps so you can recycle() the immutable bitmap.
+//        Canvas canvas = new Canvas(bmp);
+//        canvas.drawText("Hello Image", xposition, yposition, textpaint); //x/yposition is where the text will be drawn. textpaint is the Paint object to draw with.
+//
+//        OutputStream os = new FileOutputStream(dstfile); //dstfile is a File-object that you want to save to. You probably need to add some exception-handling here.
+//        bmp.compress(Bitmap.CompressFormat.JPEG, 100, os); //Output as JPG with maximum quality.
+//        try {
+//            os.flush();
+//            os.close();//Don't forget to close the stream.
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+
+        // Tell the media scanner about the new file so that it is
+        // immediately available to the user.
+        MediaScannerConnection.scanFile(this,
+                new String[]{fileName}, null,
+                new MediaScannerConnection.OnScanCompletedListener() {
+                    public void onScanCompleted(String path, Uri uri)
+                    {
+                        Log.i("ExternalStorage", "Scanned " + path + ":");
+                        Log.i("ExternalStorage", "-> uri=" + uri);
+                    }
                 }
-            }
-        }
-
-    };
-
-    private static String WifiStateToString(int state)
-    {
-        switch(state){
-            case WifiManager.WIFI_STATE_DISABLED:
-                return "disabled";
-            case WifiManager.WIFI_STATE_DISABLING:
-                return "disabling";
-            case WifiManager.WIFI_STATE_ENABLED:
-                return "enabled";
-            case WifiManager.WIFI_STATE_ENABLING:
-                return "enabling";
-            default:
-                return "unknown";
-        }
+        );
     }
 
 
-    @Override
-    protected void onResume()
-    {
-        super.onResume();
-        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show();
-        boolean enabled = _wifiManager.isWifiEnabled();
-        _wifiSwitch.setChecked(enabled);
-        NetworkInfo[] allNetworkInfo = _connectivityManager.getAllNetworkInfo();
-        int i = 0;
-        for (NetworkInfo info : allNetworkInfo) {
-            dispMsg(String.format("net%d:%s", i, info.toString()));
-        }
-
-    }
 
 
-    @Override
-    protected void onStart()
-    {
-        super.onStart();
-        registerReceiver(wifiChangeReciever, _intentFilter);
-
-    }
-
-    @Override
-    protected void onStop()
-    {
-        unregisterReceiver(wifiChangeReciever);
-        super.onStop();
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu)
-    {
-
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.main, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item)
-    {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-        if (id == R.id.action_settings) {
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
-    }
-
-
-    public void disableWifi(View v)
-    {
-
-    }
-
-    public void enableWifi(View v)
-    {
-
-    }
-
-
-    // When user clicks button, calls AsyncTask.
-    // Before attempting to fetch the URL, makes sure that there is a network connection.
-    public void ping(View view)
-    {
-        // Gets the URL from the UI's text field.
-
-        String stringUrl = "http://" + _editTextHubIp.getText() + "/api.xml";
-        ConnectivityManager connMgr = (ConnectivityManager)
-                getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
-        if (networkInfo != null && networkInfo.isConnected()) {
-            new DownloadWebpageTask().execute(stringUrl);
-        } else {
-            dispMsg("No network connection available.");
-        }
-    }
-
-    private void dispMsg(String msg)
-    {
-        Log.i(DEBUG_TAG, msg);
-        _textViewResult.append("-"+msg+"\n\n");
-    }
-
-
-    // Uses AsyncTask to create a task away from the main UI thread. This task takes a
-    // URL string and uses it to create an HttpUrlConnection. Once the connection
-    // has been established, the AsyncTask downloads the contents of the webpage as
-    // an InputStream. Finally, the InputStream is converted into a string, which is
-    // displayed in the UI by the AsyncTask's onPostExecute method.
-    private class DownloadWebpageTask extends AsyncTask<String, Void, String> {
-        @Override
-        protected String doInBackground(String... urls)
-        {
-
-            // params comes from the execute() call: params[0] is the url.
-            try {
-                return downloadUrl(urls[0]);
-            } catch (IOException e) {
-                return "Unable to retrieve web page. URL may be invalid.";
-            }
-        }
-
-        // onPostExecute displays the results of the AsyncTask.
-        @Override
-        protected void onPostExecute(String result)
-        {
-            dispMsg(result);
-        }
-    }
-
-
-    // Given a URL, establishes an HttpUrlConnection and retrieves
-    // the web page content as a InputStream, which it returns as
-    // a string.
-    private String downloadUrl(String myurl) throws IOException
-    {
-        InputStream is = null;
-        // Only display the first 2048 characters of the retrieved
-        // web page content.
-        int len = 2048;
+    void createExternalStoragePublicPicture() {
+        // Create a path where we will place our picture in the user's
+        // public pictures directory.  Note that you should be careful about
+        // what you place here, since the user often manages these files.  For
+        // pictures and other media owned by the application, consider
+        // Context.getExternalMediaDir().
+        File path = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_PICTURES);
+        File file = new File(path, "DemoPicture2.jpg");
 
         try {
-            URL url = new URL(myurl);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setReadTimeout(10000 /* milliseconds */);
-            conn.setConnectTimeout(15000 /* milliseconds */);
-            conn.setRequestMethod("GET");
-            conn.setDoInput(true);
-            // Starts the query
-            conn.connect();
-            int response = conn.getResponseCode();
-            Log.d(DEBUG_TAG, "The response is: " + response);
-            is = conn.getInputStream();
+            // Make sure the Pictures directory exists.
+            path.mkdirs();
 
-            // Convert the InputStream into a string
-            String contentAsString = readIt(is, len);
-            return contentAsString;
+            // Very simple code to copy a picture from the application's
+            // resource into the external file.  Note that this code does
+            // no error checking, and assumes the picture is small (does not
+            // try to copy it in chunks).  Note that if external storage is
+            // not currently mounted this will silently fail.
+            InputStream is = getResources().openRawResource(R.drawable.ic_launcher);
+            OutputStream os = new FileOutputStream(file);
+            byte[] data = new byte[is.available()];
+            is.read(data);
+            os.write(data);
+            is.close();
+            os.close();
 
-            // Makes sure that the InputStream is closed after the app is
-            // finished using it.
-        } finally {
-            if (is != null) {
-                is.close();
-            }
+
+            // Tell the media scanner about the new file so that it is
+            // immediately available to the user.
+//            MediaScannerConnection.scanFile(this,
+//                    new String[]{file.toString()}, null,
+//                    new MediaScannerConnection.OnScanCompletedListener() {
+//                        public void onScanCompleted(String path, Uri uri)
+//                        {
+//                            Log.i("ExternalStorage", "Scanned " + path + ":");
+//                            Log.i("ExternalStorage", "-> uri=" + uri);
+//                        }
+//                    }
+//            );
+        } catch (IOException e) {
+            // Unable to create file, likely because external storage is
+            // not currently mounted.
+            Log.w("ExternalStorage", "Error writing " + file, e);
         }
     }
 
 
-    // Reads an InputStream and converts it to a String.
-    public String readIt(InputStream stream, int len) throws IOException, UnsupportedEncodingException
-    {
-        Reader reader = null;
-        reader = new InputStreamReader(stream, "UTF-8");
-        char[] buffer = new char[len];
-        reader.read(buffer);
-        return new String(buffer);
+
+
+    private class GetMeasureBG extends AsyncTask<String, String, SensorsValue> {
+
+        @Override
+        protected SensorsValue doInBackground(String[] serials)
+        {
+            SensorsValue result = new SensorsValue();
+
+            publishProgress("Activate Wifi HotSpot");
+
+            //Activate Wifi HotSpot
+            if (!setAPState(true)) {
+                return null;
+            }
+            boolean ok = false;
+            long timeout = System.currentTimeMillis() + NETWORK_DETECTION_TIMEOUT_MS;
+            publishProgress("Wait for YoctoHub-Wireless");
+            do {
+                ArrayList<String> ips = APGetIP();
+                for (String ip : ips) {
+                    try {
+                        YAPI.RegisterHub(ip);
+                        ok = true;
+                    } catch (YAPI_Exception e) {
+                        YAPI.UnregisterHub(ip);
+                    }
+
+                }
+            } while (!ok && timeout > System.currentTimeMillis());
+
+
+            publishProgress("YoctoHub-Wireless found");
+            try {
+                String yoctoMeteoSerial = null, yoctoLightSerial = null;
+                YModule module = YModule.FirstModule();
+                while (module != null) {
+                    if (module.get_productName().equals("Yocto-Meteo")) {
+                        publishProgress("Yocto-Meteo Found");
+                        yoctoMeteoSerial = module.get_serialNumber();
+                    } else if (module.get_productName().equals("Yocto-Light")) {
+                        publishProgress("Yocto-Light Found");
+                        yoctoLightSerial = module.get_serialNumber();
+                    }
+                    module = module.nextModule();
+                }
+
+                if (yoctoMeteoSerial != null) {
+                    YHumidity yHumidity = YHumidity.FindHumidity(yoctoMeteoSerial + ".humidity");
+                    result.setHumidity(yHumidity.get_currentValue());
+                    YTemperature yTemperature = YTemperature.FindTemperature(yoctoMeteoSerial + ".temperature");
+                    result.setTemperature(yTemperature.get_currentValue());
+                    YPressure yPressure = YPressure.FindPressure(yoctoMeteoSerial + ".pressure");
+                    result.setPressure(yPressure.get_currentValue());
+                }
+                if (yoctoLightSerial != null) {
+                    YLightSensor yLightSensor = YLightSensor.FindLightSensor(yoctoLightSerial + ".lightSensor");
+                    result.setIlumination(yLightSensor.get_currentValue());
+                }
+                publishProgress("Free Yoctopuce API");
+                YAPI.FreeAPI();
+            } catch (YAPI_Exception e) {
+                publishProgress("YAPI_Exception " + e.getLocalizedMessage());
+                e.printStackTrace();
+                return null;
+            } finally {
+                publishProgress("Disable Wifi HotSpot");
+                setAPState(false);
+            }
+            return result;
+        }
+
+
+        @Override
+        protected void onProgressUpdate(String... values)
+        {
+            for (String val : values) {
+                _textViewResult.append(val + "\n");
+            }
+
+
+        }
+
+        @Override
+        protected void onPostExecute(SensorsValue sensorsValue)
+        {
+            if (sensorsValue != null) {
+                _humitidtyTextView.setText(String.format("%f %%", sensorsValue.getHumidity()));
+                _luminosity.setText(String.format("%f lux", sensorsValue.getIlumination()));
+            } else {
+                _humitidtyTextView.setText("error");
+                _luminosity.setText("error");
+
+            }
+
+        }
+
+
+        private ArrayList<String> APGetIP()
+        {
+            ArrayList<String> res = new ArrayList<String>();
+            try {
+                BufferedReader br = new BufferedReader(new FileReader("/proc/net/arp"));
+                String line;
+                while ((line = br.readLine()) != null) {
+                    String[] splitted = line.split(" +");
+
+                    if ((splitted != null) && (splitted.length >= 4)) {
+                        // Basic sanity check
+                        String mac = splitted[3];
+
+                        if (mac.matches("..:..:..:..:..:..")) {
+                            res.add(splitted[0]);
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return res;
+        }
+
+
+        private boolean setAPState(boolean on)
+        {
+            _wifiManager.setWifiEnabled(false);
+            //USE REFLECTION TO GET METHOD "SetWifiAPEnabled"
+            try {
+                Method method = _wifiManager.getClass().getMethod("setWifiApEnabled", WifiConfiguration.class, boolean.class);
+                method.invoke(_wifiManager, null, on);
+            } catch (NoSuchMethodException e) {
+                e.printStackTrace();
+                return false;
+            } catch (InvocationTargetException e) {
+                e.printStackTrace();
+                return false;
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+                return false;
+            }
+            return true;
+        }
     }
+
+
 }
 
