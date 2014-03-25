@@ -11,13 +11,14 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
 
 
     private static final String DB_NAME = "sensorval.sqlite";
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     public static final String SENSORSVALUES_TABLES = "sensorsvalues";
     private static final String COLUMN_ID = "_id";
     private static final String COLUMN_TEMPERATURE = "temperature";
     private static final String COLUMN_HUMIDITY = "humidity";
     private static final String COLUMN_PRESSURE = "pressure";
     private static final String COLUMN_LIGHT = "light";
+    private static final String COLUMN_TIMESTAMP = "tstamp";
     private static SensorDatabaseHelper sSensorDatabaseHelper = null;
 
     public SensorDatabaseHelper(Context context)
@@ -40,24 +41,30 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
     {
         // create the "sensorvalue" table
         db.execSQL("create table " + SENSORSVALUES_TABLES + " (" + COLUMN_ID + " integer primary key autoincrement," +
-                COLUMN_TEMPERATURE + " real, " + COLUMN_HUMIDITY + " real, " + COLUMN_PRESSURE + " real," +
+                COLUMN_TIMESTAMP + " integer," + COLUMN_TEMPERATURE + " real, " +
+                COLUMN_HUMIDITY + " real, " + COLUMN_PRESSURE + " real," +
                 COLUMN_LIGHT + " real)");
 
     }
 
     @Override
-    public void onUpgrade(SQLiteDatabase sqLiteDatabase, int i, int i2)
+    public void onUpgrade(SQLiteDatabase db, int i, int i2)
     {
-        // implement schema changes and data massage here when upgrading
+        // Drop older table if existed
+        db.execSQL("DROP TABLE IF EXISTS " + SENSORSVALUES_TABLES);
+
+        // Create tables again
+        onCreate(db);
     }
 
 
     public long insertSensorValue(SensorsValue sensorsValue) {
         ContentValues cv = new ContentValues();
-        cv.put("temperature", sensorsValue.getTemperature());
-        cv.put("humidity", sensorsValue.getHumidity());
-        cv.put("pressure", sensorsValue.getPressure());
-        cv.put("light", sensorsValue.getIlumination());
+        cv.put(COLUMN_TIMESTAMP, sensorsValue.getTime());
+        cv.put(COLUMN_TEMPERATURE, sensorsValue.getTemperature());
+        cv.put(COLUMN_HUMIDITY, sensorsValue.getHumidity());
+        cv.put(COLUMN_PRESSURE, sensorsValue.getPressure());
+        cv.put(COLUMN_LIGHT, sensorsValue.getLight());
         SQLiteDatabase writableDatabase = getWritableDatabase();
         if (writableDatabase == null) {
             return -1;
@@ -67,11 +74,13 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
 
     public SensorsValuesCursor querySensorsValues()
     {
-        Cursor query = getReadableDatabase().query(SENSORSVALUES_TABLES, null, null, null, null, null, COLUMN_ID + " ASC");
+        SQLiteDatabase readableDatabase = getReadableDatabase();
+        Cursor query = null;
+        if (readableDatabase != null) {
+            query = readableDatabase.query(SENSORSVALUES_TABLES, null, null, null, null, null, COLUMN_ID + " DESC");
+        }
         return new SensorsValuesCursor(query);
     }
-
-
 
 
     public static class SensorsValuesCursor extends CursorWrapper {
@@ -86,8 +95,10 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
                 return null;
             }
             SensorsValue sensorsValue= new SensorsValue();
-            long id = getLong(getColumnIndex(COLUMN_ID));
-            sensorsValue.setId(id);
+            long longval = getLong(getColumnIndex(COLUMN_ID));
+            sensorsValue.setId(longval);
+            longval = getLong(getColumnIndex(COLUMN_TIMESTAMP));
+            sensorsValue.setTimestamp(longval);
             double dblval = getDouble(getColumnIndex(COLUMN_TEMPERATURE));
             sensorsValue.setTemperature(dblval);
             dblval = getDouble(getColumnIndex(COLUMN_HUMIDITY));
@@ -95,7 +106,7 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
             dblval = getDouble(getColumnIndex(COLUMN_PRESSURE));
             sensorsValue.setPressure(dblval);
             dblval = getDouble(getColumnIndex(COLUMN_LIGHT));
-            sensorsValue.setIlumination(dblval);
+            sensorsValue.setLight(dblval);
             return sensorsValue;
         }
     }

@@ -1,7 +1,9 @@
 package com.example.wifitest.app;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.support.v4.app.ListFragment;
@@ -20,6 +22,15 @@ import com.example.wifitest.app.SensorDatabaseHelper.SensorsValuesCursor;
 public class ValuesListFragment extends ListFragment {
 
     private SensorsValuesCursor _sensorsValuesCursor;
+    private BroadcastReceiver _broadcastReceiver  = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent)
+        {
+            _sensorsValuesCursor.requery();
+            ((SensorsValuesAdapter)getListAdapter()).notifyDataSetChanged();
+        }
+    };
+
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -31,6 +42,24 @@ public class ValuesListFragment extends ListFragment {
         // create an adapter to point at this cursor
         SensorsValuesAdapter adapter = new SensorsValuesAdapter(getActivity(), _sensorsValuesCursor);
         setListAdapter(adapter);
+    }
+
+
+
+    @Override
+    public void onResume()
+    {
+        super.onResume();
+        // register refresh
+        IntentFilter filter = new IntentFilter(BgSensorsService.ACTION_NEW_SENSORS_VALUE);
+        getActivity().registerReceiver(_broadcastReceiver, filter);
+    }
+
+    @Override
+    public void onPause()
+    {
+        getActivity().unregisterReceiver(_broadcastReceiver);
+        super.onPause();
     }
 
 
@@ -71,6 +100,9 @@ public class ValuesListFragment extends ListFragment {
     {
         super.onPrepareOptionsMenu(menu);
         MenuItem item = menu.findItem(R.id.action_service_toggle);
+        if (item == null) {
+            return;
+        }
         boolean alarmOn = BgSensorsService.isServiceAlarmOn(getActivity());
         if (alarmOn) {
             item.setTitle(R.string.stop_background);

@@ -27,8 +27,9 @@ import java.util.ArrayList;
 public class BgSensorsService extends IntentService {
 
     private static final String TAG = "BgSensorsService";
-    private static final long NETWORK_DETECTION_TIMEOUT_MS = 600000; // 60 minutes
-    private static final long START_INTERVAL = 6000000;// 60 minutes
+    private static final long NETWORK_DETECTION_TIMEOUT_MS = 60000; // 1 minutes
+    private static final long START_INTERVAL = 5*60000;// 5 minutes
+    public static final String ACTION_NEW_SENSORS_VALUE = "ACTION_NEW_SENSORS_VALUE";
     private WifiManager _wifiManager;
     private SensorDatabaseHelper _sensorDatabaseHelper;
 
@@ -44,6 +45,7 @@ public class BgSensorsService extends IntentService {
         super.onCreate();
         _wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
         _sensorDatabaseHelper = SensorDatabaseHelper.get(getApplicationContext());
+
     }
 
     @Override
@@ -53,6 +55,8 @@ public class BgSensorsService extends IntentService {
         SensorsValue sensorsValue = GetSensorsValue();
         Log.i(TAG, "Sensors values" + sensorsValue.toString());
         _sensorDatabaseHelper.insertSensorValue(sensorsValue);
+        Log.i(TAG, "Sensors values saved");
+        sendBroadcast(new Intent(ACTION_NEW_SENSORS_VALUE));
     }
 
     public static void SetServiceAlarm(Context ctx, boolean isOn)
@@ -131,7 +135,7 @@ public class BgSensorsService extends IntentService {
             }
             if (yoctoLightSerial != null) {
                 YLightSensor yLightSensor = YLightSensor.FindLightSensor(yoctoLightSerial + ".lightSensor");
-                result.setIlumination(yLightSensor.get_currentValue());
+                result.setLight(yLightSensor.get_currentValue());
             }
             YAPI.FreeAPI();
         } catch (YAPI_Exception e) {

@@ -1,19 +1,22 @@
 package com.example.wifitest.app;
 
-/**
- * Created by seb on 17.03.14.
- */
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
 public class SensorsValue {
 
     private long _id;
     private double _humidity;
     private double _temperature;
     private double _pressure;
-    private double _ilumination;
+    private double _light;
+    private long _timestamp;
+    private static final SimpleDateFormat sdf = new SimpleDateFormat("MMM dd,yyyy HH:mm");
 
     public SensorsValue()
     {
         _id = -1;
+        _timestamp = System.currentTimeMillis();
     }
 
 
@@ -42,9 +45,9 @@ public class SensorsValue {
         _pressure = pressure;
     }
 
-    public void setIlumination(double ilumination)
+    public void setLight(double light)
     {
-        _ilumination = ilumination;
+        _light = light;
     }
 
     public double getHumidity()
@@ -62,29 +65,37 @@ public class SensorsValue {
         return _pressure;
     }
 
-    public double getIlumination()
+    public double getLight()
     {
-        return _ilumination;
+        return _light;
     }
+
+
+
 
     @Override
     public String toString()
     {
-        return "id " + _id +
+        Date date = new Date(_timestamp);
+        return "time=" + sdf.format(date) +
                 " temperature=" + _temperature +
                 " humidity=" + _humidity +
                 " pressure=" + _pressure +
-                " ilumination=" + _ilumination;
+                " ilumination=" + _light;
     }
 
-    public String toJson()
+    public long getTime()
     {
-        return "SensorsValue{" +
-                "_humidity=" + _humidity +
-                ", _temperature=" + _temperature +
-                ", _pressure=" + _pressure +
-                ", _ilumination=" + _ilumination +
-                '}';
+        return _timestamp;
     }
 
+    public long getTimestamp()
+    {
+        return _timestamp;
+    }
+
+    public void setTimestamp(long timestamp)
+    {
+        _timestamp = timestamp;
+    }
 }
