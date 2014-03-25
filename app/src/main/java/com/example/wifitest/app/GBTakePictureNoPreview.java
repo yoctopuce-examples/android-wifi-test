@@ -4,9 +4,16 @@ package com.example.wifitest.app;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.hardware.Camera;
 import android.hardware.Camera.PictureCallback;
 import android.hardware.Camera.Size;
+import android.media.MediaScannerConnection;
+import android.net.Uri;
 import android.os.Environment;
 import android.util.Log;
 import android.view.SurfaceHolder;
@@ -31,6 +38,7 @@ public class GBTakePictureNoPreview implements SurfaceHolder.Callback {
     private Context context = null;
     private String fileName = "";
     private boolean usingLandscape = false;
+    private String _onPictureMessage="nothing";
 
     public GBTakePictureNoPreview (Context context) {
         this.context = context;
@@ -145,15 +153,43 @@ public class GBTakePictureNoPreview implements SurfaceHolder.Callback {
                 mPreviewRunning = false;
 
                 if (data != null) {
-                    FileOutputStream fos;
-                    try {
-                        if (fileName.equals("")) {
-                            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyymmddhhmmss");
-                            String date = dateFormat.format(new Date());
-                            fileName = Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + date + ".jpg";
-                        }
+                    if (fileName.equals("")) {
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyymmddhhmmss");
+                        String date = dateFormat.format(new Date());
+                        fileName = Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + date + ".jpg";
+                    }
 
-                        fos = new FileOutputStream(fileName);
+                    try {
+                        FileOutputStream fos = new FileOutputStream(fileName);
+
+                        Bitmap bmp = BitmapFactory.decodeByteArray(data, 0, data.length).copy(Bitmap.Config.ARGB_8888, true);
+                        if (_onPictureMessage != null) {
+                            Log.d("IODBG", "Write \"" + _onPictureMessage + "\" on Picture");
+                            //myArray is the byteArray containing the image. Use copy() to create a mutable bitmap. Feel free to change the config-type. Consider doing this in two steps so you can recycle() the immutable bitmap.
+                            Canvas canvas = new Canvas(bmp);
+                            Paint paint = new Paint();
+                            paint.setColor(Color.GREEN);
+                            paint.setTextSize(20);
+                            canvas.drawText(_onPictureMessage, 10, 10, paint);
+                        }
+                        //dstfile is a File-object that you want to save to. You probably need to add some exception-handling here.
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 80, fos); //Output as JPG
+                        fos.flush();
+                        fos.close();//Don't forget to close the stream.
+
+                        // Tell the media scanner about the new file so that it is
+                        // immediately available to the user.
+                        MediaScannerConnection.scanFile(context,
+                                new String[]{fileName}, null,
+                                new MediaScannerConnection.OnScanCompletedListener() {
+                                    public void onScanCompleted(String path, Uri uri)
+                                    {
+                                        Log.i("ExternalStorage", "Scanned " + path + ":");
+                                        Log.i("ExternalStorage", "-> uri=" + uri);
+                                    }
+                                }
+                        );
+
                         fos.write(data);
                         fos.close();
 

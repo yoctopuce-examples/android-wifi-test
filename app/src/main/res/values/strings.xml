@@ -17,5 +17,6 @@
     <string name="stopped">stoped</string>
     <string name="camera">Camera</string>
     <string name="takepicture">Take Picture</string>
+    <string name="update_fg">Update In Ui Thread</string>
 
 </resources>

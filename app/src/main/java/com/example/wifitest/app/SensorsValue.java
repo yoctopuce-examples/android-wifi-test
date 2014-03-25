@@ -52,4 +52,15 @@ public class SensorsValue {
     {
         return _ilumination;
     }
+
+    @Override
+    public String toString()
+    {
+        return "SensorsValue{" +
+                "_humidity=" + _humidity +
+                ", _temperature=" + _temperature +
+                ", _pressure=" + _pressure +
+                ", _ilumination=" + _ilumination +
+                '}';
+    }
 }
