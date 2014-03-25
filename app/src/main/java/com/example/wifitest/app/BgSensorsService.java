@@ -7,7 +7,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
-import android.os.Environment;
 import android.util.Log;
 
 import com.yoctopuce.YoctoAPI.YAPI;
@@ -19,14 +18,11 @@ import com.yoctopuce.YoctoAPI.YPressure;
 import com.yoctopuce.YoctoAPI.YTemperature;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 
 public class BgSensorsService extends IntentService {
 
@@ -34,6 +30,7 @@ public class BgSensorsService extends IntentService {
     private static final long NETWORK_DETECTION_TIMEOUT_MS = 600000; // 60 minutes
     private static final long START_INTERVAL = 6000000;// 60 minutes
     private WifiManager _wifiManager;
+    private SensorDatabaseHelper _sensorDatabaseHelper;
 
     public BgSensorsService()
     {
@@ -46,19 +43,17 @@ public class BgSensorsService extends IntentService {
     {
         super.onCreate();
         _wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+        _sensorDatabaseHelper = SensorDatabaseHelper.get(getApplicationContext());
     }
 
     @Override
     protected void onHandleIntent(Intent intent)
     {
         Log.i(TAG, "intent received" + intent);
-        //SensorsValue sensorsValue = GetSensorsValue();
-        SensorsValue sensorsValue = new SensorsValue();
+        SensorsValue sensorsValue = GetSensorsValue();
         Log.i(TAG, "Sensors values" + sensorsValue.toString());
-        takePicture(this, sensorsValue);
+        _sensorDatabaseHelper.insertSensorValue(sensorsValue);
     }
-
-
 
     public static void SetServiceAlarm(Context ctx, boolean isOn)
     {
@@ -85,38 +80,6 @@ public class BgSensorsService extends IntentService {
 
 
 
-
-    public static void takePicture(Context ctx, SensorsValue sensorsValue)
-    {
-
-
-        GBTakePictureNoPreview c = new GBTakePictureNoPreview(ctx);
-        //c.setLandscape();
-        //c.setUseFrontCamera(false);
-
-        //here,we are making a folder named picFolder to store pics taken by the camera using this application
-        File pictureDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
-
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyymmddhhmmss");
-        String date = dateFormat.format(new Date());
-        String fileName = pictureDir + "/" + date + ".jpg";
-        c.setFileName(fileName);
-        //c.setOnPictureMessage(sensorsValue.toString());
-        if (c.cameraIsOk()) {
-            c.takePicture();
-        }
-
-
-
-    }
-
-
-
-
-
-
-
-
     private SensorsValue GetSensorsValue()
     {
         SensorsValue result = new SensorsValue();
@@ -126,9 +89,9 @@ public class BgSensorsService extends IntentService {
         }
         boolean ok = false;
         long timeout = System.currentTimeMillis() + NETWORK_DETECTION_TIMEOUT_MS;
+        Log.i(TAG, "Detected ip:");
         do {
             ArrayList<String> ips = APGetIP();
-            Log.i(TAG, "Detected ip:");
 
             for (String ip : ips) {
                 Log.i(TAG, "   "+ip);

@@ -4,14 +4,28 @@ package com.example.wifitest.app;
  * Created by seb on 17.03.14.
  */
 public class SensorsValue {
+
+    private long _id;
     private double _humidity;
     private double _temperature;
     private double _pressure;
     private double _ilumination;
 
     public SensorsValue()
-    { }
+    {
+        _id = -1;
+    }
 
+
+    public long getId()
+    {
+        return _id;
+    }
+
+    public void setId(long id)
+    {
+        _id = id;
+    }
 
     public void setHumidity(double humidity)
     {
@@ -56,6 +70,15 @@ public class SensorsValue {
     @Override
     public String toString()
     {
+        return "id " + _id +
+                " temperature=" + _temperature +
+                " humidity=" + _humidity +
+                " pressure=" + _pressure +
+                " ilumination=" + _ilumination;
+    }
+
+    public String toJson()
+    {
         return "SensorsValue{" +
                 "_humidity=" + _humidity +
                 ", _temperature=" + _temperature +
@@ -63,4 +86,5 @@ public class SensorsValue {
                 ", _ilumination=" + _ilumination +
                 '}';
     }
+
 }
