@@ -40,7 +40,6 @@ public class MainActivity extends ActionBarActivity {
 
     public void updateInBg(View view)
     {
-        BgSensorsService.takePicture(this, new SensorsValue());
         Intent i = new Intent(this, BgSensorsService.class);
         startService(i);
     }
