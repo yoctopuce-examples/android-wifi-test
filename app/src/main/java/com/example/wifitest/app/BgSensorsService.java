@@ -16,6 +16,7 @@ import com.yoctopuce.YoctoAPI.YLightSensor;
 import com.yoctopuce.YoctoAPI.YModule;
 import com.yoctopuce.YoctoAPI.YPressure;
 import com.yoctopuce.YoctoAPI.YTemperature;
+import com.yoctopuce.YoctoAPI.YWakeUpMonitor;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -28,8 +29,9 @@ public class BgSensorsService extends IntentService {
 
     private static final String TAG = "BgSensorsService";
     private static final long NETWORK_DETECTION_TIMEOUT_MS = 60000; // 1 minutes
-    private static final long START_INTERVAL = 5*60000;// 5 minutes
+    private static final long START_INTERVAL = 2*60000;// 5 minutes
     public static final String ACTION_NEW_SENSORS_VALUE = "ACTION_NEW_SENSORS_VALUE";
+    private static final String IS_FROM_ALARM = "IS_FROM_ALARM";
     private WifiManager _wifiManager;
     private SensorDatabaseHelper _sensorDatabaseHelper;
 
@@ -51,22 +53,26 @@ public class BgSensorsService extends IntentService {
     @Override
     protected void onHandleIntent(Intent intent)
     {
-        Log.i(TAG, "intent received" + intent);
-        SensorsValue sensorsValue = GetSensorsValue();
+        boolean formAlarm = intent.getBooleanExtra(IS_FROM_ALARM, false);
+        Log.i(TAG, "intent received" + (formAlarm ? " (from alarm manager)" : ""));
+        SensorsValue sensorsValue = GetSensorsValue(formAlarm);
         Log.i(TAG, "Sensors values" + sensorsValue.toString());
         _sensorDatabaseHelper.insertSensorValue(sensorsValue);
         Log.i(TAG, "Sensors values saved");
         sendBroadcast(new Intent(ACTION_NEW_SENSORS_VALUE));
     }
 
+
+
     public static void SetServiceAlarm(Context ctx, boolean isOn)
     {
         Intent intent = new Intent(ctx, BgSensorsService.class);
+        intent.putExtra(IS_FROM_ALARM, true);
         PendingIntent pendingIntent = PendingIntent.getService(ctx, 0, intent, 0);
 
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
         if (isOn) {
-            am.setInexactRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis(), START_INTERVAL, pendingIntent);
+            am.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis(), START_INTERVAL, pendingIntent);
         } else {
             if (pendingIntent != null) {
                 am.cancel(pendingIntent);
@@ -77,6 +83,7 @@ public class BgSensorsService extends IntentService {
 
     public static boolean isServiceAlarmOn(Context ctx) {
         Intent i = new Intent(ctx, BgSensorsService.class);
+        i.putExtra(IS_FROM_ALARM, true);
         PendingIntent pendingIntent = PendingIntent.getService(ctx, 0, i, PendingIntent.FLAG_NO_CREATE);
         return pendingIntent != null;
     }
@@ -84,7 +91,7 @@ public class BgSensorsService extends IntentService {
 
 
 
-    private SensorsValue GetSensorsValue()
+    private SensorsValue GetSensorsValue(boolean fromAlarm)
     {
         SensorsValue result = new SensorsValue();
         //Activate Wifi HotSpot
@@ -137,6 +144,16 @@ public class BgSensorsService extends IntentService {
                 YLightSensor yLightSensor = YLightSensor.FindLightSensor(yoctoLightSerial + ".lightSensor");
                 result.setLight(yLightSensor.get_currentValue());
             }
+
+            if (fromAlarm) {
+                YWakeUpMonitor hub = YWakeUpMonitor.FirstWakeUpMonitor();
+                if (hub != null) {
+                    int secUntilWakeUp = (int) (START_INTERVAL / 1000 - 5);
+                    Log.i(TAG, "Say godby to the hub for "+secUntilWakeUp+"s");
+                    hub.sleepFor(secUntilWakeUp,1);
+                }
+            }
+
             YAPI.FreeAPI();
         } catch (YAPI_Exception e) {
             e.printStackTrace();
