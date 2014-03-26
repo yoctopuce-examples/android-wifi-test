@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.util.Log;
 
 import com.yoctopuce.YoctoAPI.YAPI;
@@ -15,6 +16,7 @@ import com.yoctopuce.YoctoAPI.YHumidity;
 import com.yoctopuce.YoctoAPI.YLightSensor;
 import com.yoctopuce.YoctoAPI.YModule;
 import com.yoctopuce.YoctoAPI.YPressure;
+import com.yoctopuce.YoctoAPI.YRealTimeClock;
 import com.yoctopuce.YoctoAPI.YTemperature;
 import com.yoctopuce.YoctoAPI.YWakeUpMonitor;
 
@@ -28,10 +30,10 @@ import java.util.ArrayList;
 public class BgSensorsService extends IntentService {
 
     private static final String TAG = "BgSensorsService";
-    private static final long NETWORK_DETECTION_TIMEOUT_MS = 60000; // 1 minutes
-    private static final long START_INTERVAL = 2*60000;// 5 minutes
+    private static final long NETWORK_DETECTION_TIMEOUT = 600; // 10 minutes
+    private static final int WAKEUP_INTERVAL = 1200;// 20 minutes
     public static final String ACTION_NEW_SENSORS_VALUE = "ACTION_NEW_SENSORS_VALUE";
-    private static final String IS_FROM_ALARM = "IS_FROM_ALARM";
+    public static final String IS_FROM_ALARM = "IS_FROM_ALARM";
     private WifiManager _wifiManager;
     private SensorDatabaseHelper _sensorDatabaseHelper;
 
@@ -69,10 +71,15 @@ public class BgSensorsService extends IntentService {
         Intent intent = new Intent(ctx, BgSensorsService.class);
         intent.putExtra(IS_FROM_ALARM, true);
         PendingIntent pendingIntent = PendingIntent.getService(ctx, 0, intent, 0);
-
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
         if (isOn) {
-            am.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis(), START_INTERVAL, pendingIntent);
+            long nextWakeup=System.currentTimeMillis() +  10000;
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
+                am.set(AlarmManager.RTC, nextWakeup, pendingIntent);
+            } else {
+                am.setExact(AlarmManager.RTC, nextWakeup, pendingIntent);
+            }
+
         } else {
             if (pendingIntent != null) {
                 am.cancel(pendingIntent);
@@ -99,7 +106,7 @@ public class BgSensorsService extends IntentService {
             return result;
         }
         boolean ok = false;
-        long timeout = System.currentTimeMillis() + NETWORK_DETECTION_TIMEOUT_MS;
+        long timeout = System.currentTimeMillis() + NETWORK_DETECTION_TIMEOUT * 1000;
         Log.i(TAG, "Detected ip:");
         do {
             ArrayList<String> ips = APGetIP();
@@ -145,12 +152,32 @@ public class BgSensorsService extends IntentService {
                 result.setLight(yLightSensor.get_currentValue());
             }
 
+            // sync clock of the phone and the YoctoHub-Wireless
+            YRealTimeClock yRealTimeClock = YRealTimeClock.FirstRealTimeClock();
+            if (yRealTimeClock != null) {
+                yRealTimeClock.set_unixTime(System.currentTimeMillis() / 1000);
+            }
+
             if (fromAlarm) {
                 YWakeUpMonitor hub = YWakeUpMonitor.FirstWakeUpMonitor();
                 if (hub != null) {
-                    int secUntilWakeUp = (int) (START_INTERVAL / 1000 - 5);
-                    Log.i(TAG, "Say godby to the hub for "+secUntilWakeUp+"s");
-                    hub.sleepFor(secUntilWakeUp,1);
+                    // create Android next alarm
+                    Intent intent = new Intent(this, BgSensorsService.class);
+                    intent.putExtra(IS_FROM_ALARM, true);
+                    PendingIntent pendingIntent = PendingIntent.getService(this, 0, intent, 0);
+                    AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+                    long now = System.currentTimeMillis() / 1000;
+
+                    long nextWakeup = (now + WAKEUP_INTERVAL);
+                    //round nextWakup to the prevous minute
+                    nextWakeup -= nextWakeup % 60;
+                    hub.set_nextWakeUp(nextWakeup);
+                    hub.set_sleepCountdown(2);
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
+                        am.set(AlarmManager.RTC, nextWakeup*1000, pendingIntent);
+                    } else {
+                        am.setExact(AlarmManager.RTC, nextWakeup*1000, pendingIntent);
+                    }
                 }
             }
 

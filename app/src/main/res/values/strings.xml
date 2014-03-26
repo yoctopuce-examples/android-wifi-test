@@ -22,5 +22,6 @@
     <string name="start_background">Start Background</string>
     <string name="stop_background">Stop Background</string>
     <string name="instant_value">Instant_Value</string>
+    <string name="clear_value">Clear All</string>
 
 </resources>

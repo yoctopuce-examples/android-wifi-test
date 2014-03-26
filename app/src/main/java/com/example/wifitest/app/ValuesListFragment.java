@@ -38,7 +38,6 @@ public class ValuesListFragment extends ListFragment {
         setHasOptionsMenu(true);
         // query the list of sensorsValues
         _sensorsValuesCursor = SensorDatabaseHelper.get(getActivity().getApplicationContext()).querySensorsValues();
-
         // create an adapter to point at this cursor
         SensorsValuesAdapter adapter = new SensorsValuesAdapter(getActivity(), _sensorsValuesCursor);
         setListAdapter(adapter);
@@ -85,9 +84,10 @@ public class ValuesListFragment extends ListFragment {
                 BgSensorsService.SetServiceAlarm(getActivity(), !alarmOn);
                 getActivity().invalidateOptionsMenu();
                 return true;
-            case R.id.action_instant_value:
-                Intent i = new Intent(getActivity(), BgSensorsService.class);
-                getActivity().startService(i);
+            case R.id.action_clear_values:
+                SensorDatabaseHelper.get(getActivity().getApplicationContext()).deleteAllValues();
+                _sensorsValuesCursor.requery();
+                ((SensorsValuesAdapter)getListAdapter()).notifyDataSetChanged();
                 return true;
             default:
                 return super.onOptionsItemSelected(item);

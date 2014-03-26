@@ -1,3 +1,8 @@
 <component name="ProjectDictionaryState">
-  <dictionary name="seb" />
+  <dictionary name="seb">
+    <words>
+      <w>dblval</w>
+      <w>longval</w>
+    </words>
+  </dictionary>
 </component>

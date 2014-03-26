@@ -6,12 +6,12 @@
     <item
         android:id="@+id/action_service_toggle"
         android:title="@string/start_background"
-        android:showAsAction="always"/>
+        android:showAsAction="ifRoom"/>
         <!--android:actionLayout="@layout/switch_layout"-->
 
-    <item android:id="@+id/action_instant_value"
-          android:title="@string/instant_value"
-          android:orderInCategory="100"
+    <item android:id="@+id/action_clear_values"
+          android:title="@string/clear_value"
+          android:orderInCategory="99"
           app:showAsAction="never" />
 
     <item android:id="@+id/action_about"

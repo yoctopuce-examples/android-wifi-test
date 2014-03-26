@@ -72,6 +72,13 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
         return writableDatabase.insert(SENSORSVALUES_TABLES, null, cv);
     }
 
+    public void deleteAllValues() {
+        SQLiteDatabase db = this.getWritableDatabase();
+        if (db != null) {
+            db.delete(SENSORSVALUES_TABLES, null, null);
+            db.close();
+        }
+    }
     public SensorsValuesCursor querySensorsValues()
     {
         SQLiteDatabase readableDatabase = getReadableDatabase();
