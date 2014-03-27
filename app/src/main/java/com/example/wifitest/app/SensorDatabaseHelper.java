@@ -12,7 +12,7 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "sensorval.sqlite";
     private static final int VERSION = 2;
-    public static final String SENSORSVALUES_TABLES = "sensorsvalues";
+    private static final String SENSORSVALUES_TABLES = "sensorsvalues";
     private static final String COLUMN_ID = "_id";
     private static final String COLUMN_TEMPERATURE = "temperature";
     private static final String COLUMN_HUMIDITY = "humidity";
@@ -35,7 +35,6 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
     }
 
 
-
     @Override
     public void onCreate(SQLiteDatabase db)
     {
@@ -44,7 +43,6 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
                 COLUMN_TIMESTAMP + " integer," + COLUMN_TEMPERATURE + " real, " +
                 COLUMN_HUMIDITY + " real, " + COLUMN_PRESSURE + " real," +
                 COLUMN_LIGHT + " real)");
-
     }
 
     @Override
@@ -52,13 +50,13 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
     {
         // Drop older table if existed
         db.execSQL("DROP TABLE IF EXISTS " + SENSORSVALUES_TABLES);
-
         // Create tables again
         onCreate(db);
     }
 
 
-    public long insertSensorValue(SensorsValue sensorsValue) {
+    public long insertSensorValue(SensorsValue sensorsValue)
+    {
         ContentValues cv = new ContentValues();
         cv.put(COLUMN_TIMESTAMP, sensorsValue.getTime());
         cv.put(COLUMN_TEMPERATURE, sensorsValue.getTemperature());
@@ -72,13 +70,15 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
         return writableDatabase.insert(SENSORSVALUES_TABLES, null, cv);
     }
 
-    public void deleteAllValues() {
+    public void deleteAllValues()
+    {
         SQLiteDatabase db = this.getWritableDatabase();
         if (db != null) {
             db.delete(SENSORSVALUES_TABLES, null, null);
             db.close();
         }
     }
+
     public SensorsValuesCursor querySensorsValues()
     {
         SQLiteDatabase readableDatabase = getReadableDatabase();
@@ -101,7 +101,7 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
             if (isBeforeFirst() || isAfterLast()) {
                 return null;
             }
-            SensorsValue sensorsValue= new SensorsValue();
+            SensorsValue sensorsValue = new SensorsValue();
             long longval = getLong(getColumnIndex(COLUMN_ID));
             sensorsValue.setId(longval);
             longval = getLong(getColumnIndex(COLUMN_TIMESTAMP));

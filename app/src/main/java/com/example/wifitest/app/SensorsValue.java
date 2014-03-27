@@ -71,8 +71,6 @@ public class SensorsValue {
     }
 
 
-
-
     @Override
     public String toString()
     {
@@ -81,7 +79,7 @@ public class SensorsValue {
                 " temperature=" + _temperature +
                 " humidity=" + _humidity +
                 " pressure=" + _pressure +
-                " ilumination=" + _light;
+                " light=" + _light;
     }
 
     public long getTime()

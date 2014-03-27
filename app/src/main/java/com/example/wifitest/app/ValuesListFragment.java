@@ -22,18 +22,18 @@ import com.example.wifitest.app.SensorDatabaseHelper.SensorsValuesCursor;
 public class ValuesListFragment extends ListFragment {
 
     private SensorsValuesCursor _sensorsValuesCursor;
-    private BroadcastReceiver _broadcastReceiver  = new BroadcastReceiver() {
+    private final BroadcastReceiver _broadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent)
         {
-            _sensorsValuesCursor.requery();
-            ((SensorsValuesAdapter)getListAdapter()).notifyDataSetChanged();
+            reloadValues();
         }
     };
 
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState)
+    {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
         // query the list of sensorsValues
@@ -41,17 +41,23 @@ public class ValuesListFragment extends ListFragment {
         // create an adapter to point at this cursor
         SensorsValuesAdapter adapter = new SensorsValuesAdapter(getActivity(), _sensorsValuesCursor);
         setListAdapter(adapter);
+        reloadValues();
     }
 
+    private void reloadValues()
+    {
+        _sensorsValuesCursor.requery();
+        ((SensorsValuesAdapter) getListAdapter()).notifyDataSetChanged();
+    }
 
 
     @Override
     public void onResume()
     {
         super.onResume();
-        // register refresh
         IntentFilter filter = new IntentFilter(BgSensorsService.ACTION_NEW_SENSORS_VALUE);
         getActivity().registerReceiver(_broadcastReceiver, filter);
+        reloadValues();
     }
 
     @Override
@@ -62,22 +68,23 @@ public class ValuesListFragment extends ListFragment {
     }
 
 
-
-
     @Override
-    public void onDestroy() {
+    public void onDestroy()
+    {
         _sensorsValuesCursor.close();
         super.onDestroy();
     }
 
     @Override
-    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater)
+    {
         super.onCreateOptionsMenu(menu, inflater);
         inflater.inflate(R.menu.main, menu);
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
+    public boolean onOptionsItemSelected(MenuItem item)
+    {
         switch (item.getItemId()) {
             case R.id.action_service_toggle:
                 boolean alarmOn = BgSensorsService.isServiceAlarmOn(getActivity());
@@ -86,8 +93,7 @@ public class ValuesListFragment extends ListFragment {
                 return true;
             case R.id.action_clear_values:
                 SensorDatabaseHelper.get(getActivity().getApplicationContext()).deleteAllValues();
-                _sensorsValuesCursor.requery();
-                ((SensorsValuesAdapter)getListAdapter()).notifyDataSetChanged();
+                reloadValues();
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
@@ -106,34 +112,37 @@ public class ValuesListFragment extends ListFragment {
         boolean alarmOn = BgSensorsService.isServiceAlarmOn(getActivity());
         if (alarmOn) {
             item.setTitle(R.string.stop_background);
-        }else {
+        } else {
             item.setTitle(R.string.start_background);
         }
     }
 
     private static class SensorsValuesAdapter extends CursorAdapter {
 
-        private SensorsValuesCursor _sensorsValuesCursor;
+        private final SensorsValuesCursor _sensorsValuesCursor;
 
-        public SensorsValuesAdapter(Context context, SensorsValuesCursor cursor) {
+        public SensorsValuesAdapter(Context context, SensorsValuesCursor cursor)
+        {
             super(context, cursor, 0);
             _sensorsValuesCursor = cursor;
         }
 
         @Override
-        public View newView(Context context, Cursor cursor, ViewGroup parent) {
+        public View newView(Context context, Cursor cursor, ViewGroup parent)
+        {
             // use a layout inflater to get a row view
             LayoutInflater inflater =
-                    (LayoutInflater)context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+                    (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             return inflater.inflate(android.R.layout.simple_list_item_1, parent, false);
         }
 
         @Override
-        public void bindView(View view, Context context, Cursor cursor) {
+        public void bindView(View view, Context context, Cursor cursor)
+        {
             // get the sensorValue for the current row
             SensorsValue sensorValue = _sensorsValuesCursor.getSensorValue();
             // set up the start date text view
-            TextView textView = (TextView)view;
+            TextView textView = (TextView) view;
             textView.setText(sensorValue.toString());
         }
 

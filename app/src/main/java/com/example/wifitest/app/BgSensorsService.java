@@ -8,15 +8,12 @@ import android.content.Intent;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
 import android.os.Build;
-import android.util.Log;
 
 import com.yoctopuce.YoctoAPI.YAPI;
 import com.yoctopuce.YoctoAPI.YAPI_Exception;
 import com.yoctopuce.YoctoAPI.YHumidity;
 import com.yoctopuce.YoctoAPI.YLightSensor;
-import com.yoctopuce.YoctoAPI.YModule;
 import com.yoctopuce.YoctoAPI.YPressure;
-import com.yoctopuce.YoctoAPI.YRealTimeClock;
 import com.yoctopuce.YoctoAPI.YTemperature;
 import com.yoctopuce.YoctoAPI.YWakeUpMonitor;
 
@@ -33,14 +30,12 @@ public class BgSensorsService extends IntentService {
     private static final long NETWORK_DETECTION_TIMEOUT = 600; // 10 minutes
     private static final int WAKEUP_INTERVAL = 1200;// 20 minutes
     public static final String ACTION_NEW_SENSORS_VALUE = "ACTION_NEW_SENSORS_VALUE";
-    public static final String IS_FROM_ALARM = "IS_FROM_ALARM";
     private WifiManager _wifiManager;
     private SensorDatabaseHelper _sensorDatabaseHelper;
 
     public BgSensorsService()
     {
         super(TAG);
-        Log.i(TAG, "New instance");
     }
 
     @Override
@@ -49,148 +44,123 @@ public class BgSensorsService extends IntentService {
         super.onCreate();
         _wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
         _sensorDatabaseHelper = SensorDatabaseHelper.get(getApplicationContext());
-
     }
+
+
 
     @Override
     protected void onHandleIntent(Intent intent)
     {
-        boolean formAlarm = intent.getBooleanExtra(IS_FROM_ALARM, false);
-        Log.i(TAG, "intent received" + (formAlarm ? " (from alarm manager)" : ""));
-        SensorsValue sensorsValue = GetSensorsValue(formAlarm);
-        Log.i(TAG, "Sensors values" + sensorsValue.toString());
+        // retrieve values form all sensors in a efficient way
+        SensorsValue sensorsValue = GetSensorsValue();
+        // save it to the database
         _sensorDatabaseHelper.insertSensorValue(sensorsValue);
-        Log.i(TAG, "Sensors values saved");
+        // notify all listeners that we have a new value in the database
         sendBroadcast(new Intent(ACTION_NEW_SENSORS_VALUE));
     }
 
 
-
-    public static void SetServiceAlarm(Context ctx, boolean isOn)
-    {
-        Intent intent = new Intent(ctx, BgSensorsService.class);
-        intent.putExtra(IS_FROM_ALARM, true);
-        PendingIntent pendingIntent = PendingIntent.getService(ctx, 0, intent, 0);
-        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
-        if (isOn) {
-            long nextWakeup=System.currentTimeMillis() +  10000;
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-                am.set(AlarmManager.RTC, nextWakeup, pendingIntent);
-            } else {
-                am.setExact(AlarmManager.RTC, nextWakeup, pendingIntent);
-            }
-
-        } else {
-            if (pendingIntent != null) {
-                am.cancel(pendingIntent);
-                pendingIntent.cancel();
-            }
-        }
-    }
-
-    public static boolean isServiceAlarmOn(Context ctx) {
-        Intent i = new Intent(ctx, BgSensorsService.class);
-        i.putExtra(IS_FROM_ALARM, true);
-        PendingIntent pendingIntent = PendingIntent.getService(ctx, 0, i, PendingIntent.FLAG_NO_CREATE);
-        return pendingIntent != null;
-    }
-
-
-
-
-    private SensorsValue GetSensorsValue(boolean fromAlarm)
+    /**
+     * Retrieves Values for of all Yoctopuce sensors connected
+     *
+     * @return a SensorValue object with all value set
+     */
+    private SensorsValue GetSensorsValue()
     {
         SensorsValue result = new SensorsValue();
-        //Activate Wifi HotSpot
+        //Activate WiFi HotSpot
         if (!setAPState(true)) {
             return result;
         }
         boolean ok = false;
         long timeout = System.currentTimeMillis() + NETWORK_DETECTION_TIMEOUT * 1000;
-        Log.i(TAG, "Detected ip:");
+        // wait at max NETWORK_DETECTION_TIMEOUT seconds for the YoctoHub-Wireless to connect
+        // to the Wifi WiFi HotSpot
         do {
-            ArrayList<String> ips = APGetIP();
-
+            ArrayList<String> ips = apGetIPs();
+            // test all IP that are connected to the WiFi HotSpot
             for (String ip : ips) {
-                Log.i(TAG, "   "+ip);
                 try {
+                    // test if this IP is a YoctoHub-Wireless
                     YAPI.RegisterHub(ip);
                     ok = true;
                 } catch (YAPI_Exception e) {
+                    // the IP is not Yoctopuce hub
                     YAPI.UnregisterHub(ip);
                 }
             }
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            if (!ok) {
+                // if the YoctoHub-Wirless is not here sleep 1 second
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                    return result;
+                }
             }
         } while (!ok && timeout > System.currentTimeMillis());
 
-        try {
-            String yoctoMeteoSerial = null, yoctoLightSerial = null;
-            YModule module = YModule.FirstModule();
-            while (module != null) {
-                if (module.get_productName().equals("Yocto-Meteo")) {
-                    yoctoMeteoSerial = module.get_serialNumber();
-                } else if (module.get_productName().equals("Yocto-Light")) {
-                    yoctoLightSerial = module.get_serialNumber();
+        if (ok) {
+            try {
+                //  get value from all sensors
+                YHumidity yHumidity = YHumidity.FirstHumidity();
+                if (yHumidity != null) {
+                    result.setHumidity(yHumidity.get_currentValue());
                 }
-                module = module.nextModule();
-            }
+                YTemperature yTemperature = YTemperature.FirstTemperature();
+                if (yTemperature != null) {
+                    result.setTemperature(yTemperature.get_currentValue());
+                }
+                YPressure yPressure = YPressure.FirstPressure();
+                if (yPressure != null) {
+                    result.setPressure(yPressure.get_currentValue());
+                }
+                YLightSensor yLightSensor = YLightSensor.FirstLightSensor();
+                if (yLightSensor != null) {
+                    result.setLight(yLightSensor.get_currentValue());
 
-            if (yoctoMeteoSerial != null) {
-                YHumidity yHumidity = YHumidity.FindHumidity(yoctoMeteoSerial + ".humidity");
-                result.setHumidity(yHumidity.get_currentValue());
-                YTemperature yTemperature = YTemperature.FindTemperature(yoctoMeteoSerial + ".temperature");
-                result.setTemperature(yTemperature.get_currentValue());
-                YPressure yPressure = YPressure.FindPressure(yoctoMeteoSerial + ".pressure");
-                result.setPressure(yPressure.get_currentValue());
-            }
-            if (yoctoLightSerial != null) {
-                YLightSensor yLightSensor = YLightSensor.FindLightSensor(yoctoLightSerial + ".lightSensor");
-                result.setLight(yLightSensor.get_currentValue());
-            }
-
-            // sync clock of the phone and the YoctoHub-Wireless
-            YRealTimeClock yRealTimeClock = YRealTimeClock.FirstRealTimeClock();
-            if (yRealTimeClock != null) {
-                yRealTimeClock.set_unixTime(System.currentTimeMillis() / 1000);
-            }
-
-            if (fromAlarm) {
+                }
+                // find Wake up Monitors of the YoctoHub-Wireless
                 YWakeUpMonitor hub = YWakeUpMonitor.FirstWakeUpMonitor();
                 if (hub != null) {
-                    // create Android next alarm
+                    // create Pending intent to start this service again
                     Intent intent = new Intent(this, BgSensorsService.class);
-                    intent.putExtra(IS_FROM_ALARM, true);
                     PendingIntent pendingIntent = PendingIntent.getService(this, 0, intent, 0);
                     AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+                    // compute next wake up time (seconds since EPOCH)
                     long now = System.currentTimeMillis() / 1000;
-
                     long nextWakeup = (now + WAKEUP_INTERVAL);
-                    //round nextWakup to the prevous minute
-                    nextWakeup -= nextWakeup % 60;
+                    // Program the next wake for YoctoHub-Wireless
                     hub.set_nextWakeUp(nextWakeup);
+                    // put the YoctoHub-Wireless in deep sleep until next wake up
                     hub.set_sleepCountdown(2);
+                    // Program the Android Alarm manager to start this service again
+                    // at the next wake up time.
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-                        am.set(AlarmManager.RTC, nextWakeup*1000, pendingIntent);
+                        am.set(AlarmManager.RTC, nextWakeup * 1000, pendingIntent);
                     } else {
-                        am.setExact(AlarmManager.RTC, nextWakeup*1000, pendingIntent);
+                        am.setExact(AlarmManager.RTC, nextWakeup * 1000, pendingIntent);
                     }
                 }
+                // release all resources used by the Yoctopuce API
+                YAPI.FreeAPI();
+            } catch (YAPI_Exception e) {
+                e.printStackTrace();
             }
-
-            YAPI.FreeAPI();
-        } catch (YAPI_Exception e) {
-            e.printStackTrace();
-        } finally {
-            setAPState(false);
         }
+        // disable the WiFi HotSpot to reduce power consumption
+        setAPState(false);
         return result;
     }
 
-    private ArrayList<String> APGetIP()
+
+    /**
+     * Retrieve a String array with the IP of all device connected to the WiFi access point
+     * this is done by parsing the content of /proc/net/arp
+     *
+     * @return the IP of all device connected to the WiFi access point
+     */
+    private ArrayList<String> apGetIPs()
     {
         ArrayList<String> res = new ArrayList<String>();
         try {
@@ -198,11 +168,9 @@ public class BgSensorsService extends IntentService {
             String line;
             while ((line = br.readLine()) != null) {
                 String[] splitted = line.split(" +");
-
                 if ((splitted != null) && (splitted.length >= 4)) {
                     // Basic sanity check
                     String mac = splitted[3];
-
                     if (mac.matches("..:..:..:..:..:..")) {
                         res.add(splitted[0]);
                     }
@@ -215,6 +183,12 @@ public class BgSensorsService extends IntentService {
     }
 
 
+    /**
+     * Enable or disable the Android WiFi HotSpot
+     *
+     * @param on true to enable it false to disable it.
+     * @return true on success false on error
+     */
     private boolean setAPState(boolean on)
     {
         _wifiManager.setWifiEnabled(false);
@@ -234,4 +208,50 @@ public class BgSensorsService extends IntentService {
         }
         return true;
     }
+
+
+    /**
+     * Register/unregister a PendingIntent that will start this service
+     *
+     * @param ctx  a Android Context
+     * @param isOn true register the service false to unregister the service
+     */
+    public static void SetServiceAlarm(Context ctx, boolean isOn)
+    {
+        Intent intent = new Intent(ctx, BgSensorsService.class);
+        PendingIntent pendingIntent = PendingIntent.getService(ctx, 0, intent, 0);
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (isOn) {
+            // triger the next call as soon as possible.
+            long nextWakeup = System.currentTimeMillis();
+            // we use the alarm using RTC with exact time (otherwise we will probably be
+            // out of sync with the YoctoHubWireless)
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
+                am.set(AlarmManager.RTC, nextWakeup, pendingIntent);
+            } else {
+                am.setExact(AlarmManager.RTC, nextWakeup, pendingIntent);
+            }
+        } else {
+            // cancel any pending call to the service
+            if (pendingIntent != null) {
+                am.cancel(pendingIntent);
+                pendingIntent.cancel();
+            }
+        }
+    }
+
+    /**
+     * Check if there is a pending call to this service
+     *
+     * @param ctx a Android Context
+     * @return true if a call to the service is pending
+     */
+    public static boolean isServiceAlarmOn(Context ctx)
+    {
+        Intent i = new Intent(ctx, BgSensorsService.class);
+        PendingIntent pendingIntent = PendingIntent.getService(ctx, 0, i, PendingIntent.FLAG_NO_CREATE);
+        return pendingIntent != null;
+    }
+
+
 }
