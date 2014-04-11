@@ -21,7 +21,6 @@ import com.example.wifitest.app.SensorDatabaseHelper.SensorsValuesCursor;
 
 public class ValuesListFragment extends ListFragment {
 
-    private SensorsValuesCursor _sensorsValuesCursor;
     private final BroadcastReceiver _broadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent)
@@ -29,7 +28,7 @@ public class ValuesListFragment extends ListFragment {
             reloadValues();
         }
     };
-
+    private SensorsValuesCursor _sensorsValuesCursor;
 
     @Override
     public void onCreate(Bundle savedInstanceState)
@@ -97,6 +96,9 @@ public class ValuesListFragment extends ListFragment {
             case R.id.action_clear_values:
                 SensorDatabaseHelper.get(getActivity().getApplicationContext()).deleteAllValues();
                 reloadValues();
+                return true;
+            case R.id.action_settings:
+                startActivity(new Intent(getActivity(), SettingsActivity.class));
                 return true;
             default:
                 return super.onOptionsItemSelected(item);

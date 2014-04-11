@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <EditTextPreference
+        android:defaultValue=""
+        android:key="alertPhoneNumber"
+        android:phoneNumber="true"
+        android:summary="@string/alertPhoneNumberDescr"
+        android:title="@string/alertPhoneNumber"/>
+
+    <EditTextPreference
+        android:defaultValue="1200"
+        android:key="wakeUpInterval"
+        android:numeric="integer"
+        android:summary="@string/wakeUpIntervalDescr"
+        android:title="@string/wakeUpInterval"/>
+
+
+</PreferenceScreen>

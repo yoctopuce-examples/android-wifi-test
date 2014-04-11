@@ -5,17 +5,18 @@
 
     <item
         android:id="@+id/action_service_toggle"
-        android:title="@string/start_background"
-        android:showAsAction="ifRoom"/>
-        <!--android:actionLayout="@layout/switch_layout"-->
+        android:showAsAction="ifRoom"
+        android:title="@string/start_background"/>
+    <!--android:actionLayout="@layout/switch_layout"-->
 
     <item android:id="@+id/action_clear_values"
-          android:title="@string/clear_value"
           android:orderInCategory="99"
+          android:title="@string/clear_value"
           app:showAsAction="never" />
 
-    <item android:id="@+id/action_about"
-        android:title="@string/about"
+    <item
+        android:id="@+id/action_settings"
         android:orderInCategory="100"
+        android:title="@string/settings"
         app:showAsAction="never" />
 </menu>
