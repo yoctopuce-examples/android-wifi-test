@@ -42,7 +42,10 @@ public class ValuesListFragment extends ListFragment {
         SensorsValuesAdapter adapter = new SensorsValuesAdapter(getActivity(), _sensorsValuesCursor);
         setListAdapter(adapter);
         reloadValues();
+
     }
+
+
 
     private void reloadValues()
     {
