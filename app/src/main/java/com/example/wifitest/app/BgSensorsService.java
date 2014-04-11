@@ -41,7 +41,7 @@ public class BgSensorsService extends IntentService {
     private static long _detectionTimeout = 300; // 5 minutes
     private static final int WAKEUP_INTERVAL = 1200;// 20 minutes
     public static final String ACTION_NEW_SENSORS_VALUE = "ACTION_NEW_SENSORS_VALUE";
-    private static final String PHONE_NUMBER_FOR_SMS = "+41763872096";
+    private static final String PHONE_NUMBER_FOR_SMS = "+41000000000";
     private static final int RETRY_DELAY = 5 * 60000;
     private WifiManager _wifiManager;
     private SensorDatabaseHelper _sensorDatabaseHelper;
