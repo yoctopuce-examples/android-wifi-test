@@ -7,7 +7,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.media.MediaScannerConnection;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
 import android.os.BatteryManager;
@@ -15,6 +14,7 @@ import android.os.Build;
 import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.telephony.SmsManager;
+import android.util.Log;
 
 import com.yoctopuce.YoctoAPI.YAPI;
 import com.yoctopuce.YoctoAPI.YAPI_Exception;
@@ -45,6 +45,9 @@ public class BgSensorsService extends IntentService {
     public static final String PREF_DETECTION_TIMEOUT = "detectionTimeout";
     public static final String PREF_LAST_BATTERY_LEVEL = "lastBatteryLevel";
     public static final String PREF_LAST_GET_SENSOR_FAILED = "lastGetSensorFailed";
+    public static final String INTENT_TYPE = "INTENT_TYPE";
+    public static final int INTENT_FULL_MEASURE = 0;
+    public static final int INTENT_TEST_SLEEP = 1;
     private static final String TAG = "BgSensorsService";
     private static final int RETRY_DELAY = 5 * 60000;
     private WifiManager _wifiManager;
@@ -95,8 +98,21 @@ public class BgSensorsService extends IntentService {
     public static boolean isServiceAlarmOn(Context ctx)
     {
         Intent i = new Intent(ctx, BgSensorsService.class);
+        i.putExtra(INTENT_TYPE, INTENT_FULL_MEASURE);
         PendingIntent pendingIntent = PendingIntent.getService(ctx, 0, i, PendingIntent.FLAG_NO_CREATE);
         return pendingIntent != null;
+    }
+
+    public static String getLogFilePath()
+    {
+        File path = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS);
+        if (!path.exists()) {
+            if (!path.mkdirs()) {
+                return "";
+            }
+        }
+        return path.getAbsolutePath() + "/wifitest.log";
     }
 
     @Override
@@ -112,28 +128,23 @@ public class BgSensorsService extends IntentService {
     protected void logToFile(String msg)
     {
         PrintWriter pw = null;
-        try {
-            File path = Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_DOWNLOADS);
-            if (!path.exists()) {
-                if (!path.mkdirs()) {
-                    SendSMS("unable to create " + path.getAbsolutePath());
+        Log.d(TAG, msg);
+        if (isExternalStorageWritable()) {
+            try {
+                String filename = getLogFilePath();
+                pw = new PrintWriter(
+                        new FileWriter(filename, true));
+                pw.append(_df.format(new Date())).append(":").append(msg).append("\n");
+                pw.flush();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                if (pw != null) {
+                    pw.close();
                 }
-                // initiate media scan and put the new things into the path array to
-                // make the scanner aware of the location and the files you want to see
             }
-            String filename = path.getAbsolutePath() + "/wifitest.log";
-            MediaScannerConnection.scanFile(this, new String[]{filename}, null, null);
-            pw = new PrintWriter(
-                    new FileWriter(filename, true));
-            pw.append(_df.format(new Date())).append(":").append(msg).append("\n");
-            pw.flush();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            if (pw != null) {
-                pw.close();
-            }
+        } else {
+            Log.e(TAG, "unable to use External Storage");
         }
     }
 
@@ -141,14 +152,14 @@ public class BgSensorsService extends IntentService {
     protected void onHandleIntent(Intent intent)
     {
 
+        int type = intent.getIntExtra(INTENT_TYPE, INTENT_FULL_MEASURE);
         // retrieve values form all sensors in a efficient way
-        SensorsValue sensorsValue = GetSensorsValue();
+        SensorsValue sensorsValue = GetSensorsValue(type);
         if (sensorsValue != null) {
             // save it to the database
             _sensorDatabaseHelper.insertSensorValue(sensorsValue);
         }
         checkBatteryLevel();
-
         // notify all listeners that we have a new value in the database
         sendBroadcast(new Intent(ACTION_NEW_SENSORS_VALUE));
     }
@@ -194,12 +205,15 @@ public class BgSensorsService extends IntentService {
      * Retrieves Values for of all Yoctopuce sensors connected
      *
      * @return a SensorValue object with all value set
+     * @param type type of request
      */
-    private SensorsValue GetSensorsValue()
+    private SensorsValue GetSensorsValue(int type)
     {
         //Activate WiFi HotSpot
         if (!setAPState(true)) {
-            programNextServiceStart(System.currentTimeMillis() + RETRY_DELAY);
+            if (type == INTENT_FULL_MEASURE) {
+                programNextServiceStart(System.currentTimeMillis() + RETRY_DELAY);
+            }
             return null;
         }
         SensorsValue result = null;
@@ -258,30 +272,38 @@ public class BgSensorsService extends IntentService {
                 YLightSensor yLightSensor = YLightSensor.FirstLightSensor();
                 if (yLightSensor != null) {
                     result.setLight(yLightSensor.get_currentValue());
-
                 }
-
                 // find Wake up Monitors of the YoctoHub-Wireless
                 YWakeUpMonitor hub = YWakeUpMonitor.FirstWakeUpMonitor();
                 if (hub != null) {
                     // compute next wake up time (seconds since EPOCH)
                     long now = System.currentTimeMillis() / 1000;
-                    int wakeupInterval = getWakeUpInterval(defaultSharedPreferences);
-                    long nextWakeUp = (now + wakeupInterval);
-                    hub.sleepFor(wakeupInterval, 2);
-                    programNextServiceStart(nextWakeUp * 1000);
-                    logToFile("Call programed for " + _df.format(new Date(nextWakeUp * 1000)));
+                    int wakeUpInterval = getWakeUpInterval(defaultSharedPreferences);
+                    if (type == INTENT_TEST_SLEEP) {
+                        wakeUpInterval = 120; //2 minutes
+                        logToFile("Test: put hub in sleep mode for 2 minutes");
+                    }
+                    long nextWakeUp = (now + wakeUpInterval);
+                    hub.sleepFor(wakeUpInterval, 2);
+                    if (type == INTENT_FULL_MEASURE) {
+                        programNextServiceStart(nextWakeUp * 1000);
+                        logToFile("Call programed for " + _df.format(new Date(nextWakeUp * 1000)));
+                    }
                 }
                 // release all resources used by the Yoctopuce API
                 YAPI.FreeAPI();
             } catch (YAPI_Exception e) {
                 e.printStackTrace();
                 logToFile(e.getStackTraceToString());
-                programNextServiceStart(System.currentTimeMillis() + RETRY_DELAY);
+                if (type == INTENT_FULL_MEASURE) {
+                    programNextServiceStart(System.currentTimeMillis() + RETRY_DELAY);
+                }
             }
             if (lastCallFailed) {
                 SendSMS("Recover from last error");
-                defaultSharedPreferences.edit().putBoolean(PREF_LAST_GET_SENSOR_FAILED, false).commit();
+                if (type == INTENT_FULL_MEASURE) {
+                    defaultSharedPreferences.edit().putBoolean(PREF_LAST_GET_SENSOR_FAILED, false).commit();
+                }
             }
         } else {
             String msg = "Hub did not show up after " + detectionTimeout + " seconds (started " + _df.format(startDate) + ")";
@@ -297,7 +319,9 @@ public class BgSensorsService extends IntentService {
             edit.commit();
             long nextWakeUpMs = System.currentTimeMillis() + RETRY_DELAY;
             logToFile("retry programed for " + _df.format(new Date(nextWakeUpMs)));
-            programNextServiceStart(nextWakeUpMs);
+            if (type == INTENT_FULL_MEASURE) {
+                programNextServiceStart(nextWakeUpMs);
+            }
         }
         // disable the WiFi HotSpot to reduce power consumption
         setAPState(false);
@@ -320,6 +344,7 @@ public class BgSensorsService extends IntentService {
     {
         // create Pending intent to start this service again
         Intent intent = new Intent(this, BgSensorsService.class);
+        intent.putExtra(INTENT_TYPE, INTENT_FULL_MEASURE);
         PendingIntent pendingIntent = PendingIntent.getService(this, 0, intent, 0);
         AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
         // at the next wake up time.
@@ -382,6 +407,14 @@ public class BgSensorsService extends IntentService {
             return false;
         }
         return true;
+    }
+
+
+    /* Checks if external storage is available for read and write */
+    public boolean isExternalStorageWritable()
+    {
+        String state = Environment.getExternalStorageState();
+        return Environment.MEDIA_MOUNTED.equals(state);
     }
 
 

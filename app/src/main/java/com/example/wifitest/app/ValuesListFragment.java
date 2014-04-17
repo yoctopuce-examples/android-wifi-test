@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.app.ListFragment;
 import android.support.v4.widget.CursorAdapter;
@@ -18,6 +19,8 @@ import android.widget.TextView;
 
 import com.example.wifitest.app.SensorDatabaseHelper.SensorsValuesCursor;
 
+import java.io.File;
+
 
 public class ValuesListFragment extends ListFragment {
 
@@ -29,6 +32,7 @@ public class ValuesListFragment extends ListFragment {
         }
     };
     private SensorsValuesCursor _sensorsValuesCursor;
+
 
     @Override
     public void onCreate(Bundle savedInstanceState)
@@ -95,10 +99,27 @@ public class ValuesListFragment extends ListFragment {
                 return true;
             case R.id.action_clear_values:
                 SensorDatabaseHelper.get(getActivity().getApplicationContext()).deleteAllValues();
+                File file = new File(BgSensorsService.getLogFilePath());
+                file.delete();
                 reloadValues();
                 return true;
             case R.id.action_settings:
                 startActivity(new Intent(getActivity(), SettingsActivity.class));
+                return true;
+            case R.id.action_share_logs:
+                Intent shareintent = new Intent(android.content.Intent.ACTION_SEND);
+                shareintent.setType("text/plain");
+                shareintent.putExtra(Intent.EXTRA_STREAM, Uri.parse("file://" + BgSensorsService.getLogFilePath()));
+                // Add data to the intent, the receiving app will decide what to do with it.
+                String appname = getActivity().getString(R.string.app_name);
+                shareintent.putExtra(Intent.EXTRA_SUBJECT, "Debug Logs of " + appname);
+                shareintent.putExtra(Intent.EXTRA_TEXT, "Here is the logs of " + appname);
+                startActivity(Intent.createChooser(shareintent, "How do you want to share logs?"));
+                return true;
+            case R.id.action_testSleep:
+                Intent intent = new Intent(getActivity(), BgSensorsService.class);
+                intent.putExtra(BgSensorsService.INTENT_TYPE, BgSensorsService.INTENT_TEST_SLEEP);
+                getActivity().startService(intent);
                 return true;
             default:
                 return super.onOptionsItemSelected(item);

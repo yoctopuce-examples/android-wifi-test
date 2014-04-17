@@ -58,7 +58,7 @@ public class SensorDatabaseHelper extends SQLiteOpenHelper {
     public long insertSensorValue(SensorsValue sensorsValue)
     {
         ContentValues cv = new ContentValues();
-        cv.put(COLUMN_TIMESTAMP, sensorsValue.getTime());
+        cv.put(COLUMN_TIMESTAMP, sensorsValue.getTimestamp());
         cv.put(COLUMN_TEMPERATURE, sensorsValue.getTemperature());
         cv.put(COLUMN_HUMIDITY, sensorsValue.getHumidity());
         cv.put(COLUMN_PRESSURE, sensorsValue.getPressure());

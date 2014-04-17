@@ -5,13 +5,13 @@ import java.util.Date;
 
 public class SensorsValue {
 
+    private static final SimpleDateFormat sdf = new SimpleDateFormat("MMM dd,yyyy HH:mm");
     private long _id;
     private double _humidity;
     private double _temperature;
     private double _pressure;
     private double _light;
     private long _timestamp;
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("MMM dd,yyyy HH:mm");
 
     public SensorsValue()
     {
@@ -30,29 +30,14 @@ public class SensorsValue {
         _id = id;
     }
 
-    public void setHumidity(double humidity)
-    {
-        _humidity = humidity;
-    }
-
-    public void setTemperature(double temperature)
-    {
-        _temperature = temperature;
-    }
-
-    public void setPressure(double pressure)
-    {
-        _pressure = pressure;
-    }
-
-    public void setLight(double light)
-    {
-        _light = light;
-    }
-
     public double getHumidity()
     {
         return _humidity;
+    }
+
+    public void setHumidity(double humidity)
+    {
+        _humidity = humidity;
     }
 
     public double getTemperature()
@@ -60,9 +45,19 @@ public class SensorsValue {
         return _temperature;
     }
 
+    public void setTemperature(double temperature)
+    {
+        _temperature = temperature;
+    }
+
     public double getPressure()
     {
         return _pressure;
+    }
+
+    public void setPressure(double pressure)
+    {
+        _pressure = pressure;
     }
 
     public double getLight()
@@ -70,6 +65,10 @@ public class SensorsValue {
         return _light;
     }
 
+    public void setLight(double light)
+    {
+        _light = light;
+    }
 
     @Override
     public String toString()
@@ -82,10 +81,6 @@ public class SensorsValue {
                 " light=" + _light;
     }
 
-    public long getTime()
-    {
-        return _timestamp;
-    }
 
     public long getTimestamp()
     {
